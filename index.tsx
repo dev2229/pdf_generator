@@ -1,20 +1,17 @@
 
-/**
- * CRITICAL: Immediate Global Polyfills
- * We must define 'process' before ANY other module is imported because 
- * @google/genai and other libraries may access it at the module level.
- */
-(window as any).process = (window as any).process || { env: {} };
-(window as any).process.env = (window as any).process.env || {};
+if (typeof window !== 'undefined') {
+  (window as any).process = (window as any).process || { env: {} };
+  (window as any).process.env = (window as any).process.env || {};
+}
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.tsx';
+import App from './App';
 
-// Global error logger for easier debugging on production deployments
-window.onerror = function(message, source, lineno, colno, error) {
+// Global error logger for easier debugging
+window.onerror = function(message) {
   const root = document.getElementById('root');
-  if (root && root.innerHTML.includes('Initializing')) {
+  if (root && root.innerHTML.includes('BOOTING')) {
     root.innerHTML = `
       <div style="padding: 40px; color: #ef4444; font-family: sans-serif; text-align: center;">
         <h1 style="font-weight: 800; margin-bottom: 16px;">BOOT ERROR</h1>
@@ -27,17 +24,11 @@ window.onerror = function(message, source, lineno, colno, error) {
 };
 
 const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Target container 'root' not found in document.");
-}
-
-try {
+if (rootElement) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
   );
-} catch (e: any) {
-  rootElement.innerHTML = `<div style="color: red; padding: 20px;">Mount Failure: ${e.message}</div>`;
 }

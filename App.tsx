@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types';
-import { GeminiService } from './services/geminiService';
-import { PdfService } from './services/pdfService';
-import ProcessSteps from './components/ProcessSteps';
+import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types.ts';
+import { GeminiService } from './services/geminiService.ts';
+import { PdfService } from './services/pdfService.ts';
+import ProcessSteps from './components/ProcessSteps.tsx';
 
 const ACADEMIC_STRUCTURE: Record<string, string[]> = {
   "Engineering": [

@@ -1,25 +1,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { QuestionItem, AcademicContext } from "../types";
+import { QuestionItem, AcademicContext } from "../types.ts";
 
 export class GeminiService {
-  private getClient() {
-    // Check for process.env availability defensively
-    const apiKey = (window as any).process?.env?.API_KEY || '';
-    
-    if (!apiKey || apiKey.trim() === '') {
-      console.error("GeminiService: API_KEY is missing from environment variables.");
-      throw new Error("API configuration is missing. Please ensure you are in the correct environment.");
-    }
-    
-    try {
-      return new GoogleGenAI({ apiKey });
-    } catch (e) {
-      console.error("Failed to initialize GoogleGenAI client:", e);
-      throw new Error("AI Engine failed to start. Check browser console for details.");
-    }
-  }
-
   private async callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 2000): Promise<T> {
     try {
       return await fn();
@@ -36,7 +19,7 @@ export class GeminiService {
 
   async extractQuestions(text: string): Promise<QuestionItem[]> {
     return this.callWithRetry(async () => {
-      const ai = this.getClient();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Extract all exam questions from the following text. 
@@ -65,13 +48,18 @@ export class GeminiService {
 
       const content = response.text;
       if (!content) return [];
-      return JSON.parse(content.trim());
+      try {
+        return JSON.parse(content.trim());
+      } catch (e) {
+        console.error("Failed to parse extracted questions", e);
+        return [];
+      }
     });
   }
 
   async solveQuestions(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
     return this.callWithRetry(async () => {
-      const ai = this.getClient();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const prompt = `Act as a world-class Professor.
       Context: ${context.field}, ${context.subField}, Subject: ${context.subject}
@@ -108,13 +96,18 @@ export class GeminiService {
 
       const content = response.text;
       if (!content) return questions.map(q => ({ ...q, answer: "Solution failed." }));
-      return JSON.parse(content.trim());
+      try {
+        return JSON.parse(content.trim());
+      } catch (e) {
+        console.error("Failed to parse solved questions", e);
+        return questions.map(q => ({ ...q, answer: "Solution parse error." }));
+      }
     });
   }
 
   async generateTechnicalDiagram(prompt: string): Promise<string | undefined> {
     try {
-      const ai = this.getClient();
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {

@@ -4,39 +4,41 @@ import { extractQuestionsAction, solveQuestionsAction, generateDiagramAction } f
 
 /**
  * CLIENT-SIDE SERVICE
- * This service now communicates with the simulated "API" layer.
- * No direct imports from @google/genai are present here.
+ * This service acts as the 'frontend' bridge to the 'backend' API folder.
+ * It handles retries and high-level orchestration without knowing SDK details.
  */
 export class GeminiService {
-  private async apiFetch<T>(action: () => Promise<T>, retries = 2, delay = 2000): Promise<T> {
+  private async executeAction<T>(action: () => Promise<T>, retries = 2, delay = 2000): Promise<T> {
     try {
-      // In a real production app, this would be a window.fetch('/api/...') call.
-      // Here we simulate the network request by calling the "API" module functions.
       return await action();
     } catch (error: any) {
-      const isQuotaError = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
+      // Handle quota or common network errors with exponential backoff
+      const errorMsg = error?.message || "";
+      const isQuotaError = errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
+      
       if (isQuotaError && retries > 0) {
-        console.warn(`Simulated API Route: Quota exceeded, retrying...`);
+        console.warn(`API Rate Limit hit, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        return this.apiFetch(action, retries - 1, delay * 2);
+        return this.executeAction(action, retries - 1, delay * 2);
       }
+      
       throw error;
     }
   }
 
   async extractQuestions(text: string): Promise<QuestionItem[]> {
-    return this.apiFetch(() => extractQuestionsAction(text));
+    return this.executeAction(() => extractQuestionsAction(text));
   }
 
   async solveQuestions(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-    return this.apiFetch(() => solveQuestionsAction(questions, context));
+    return this.executeAction(() => solveQuestionsAction(questions, context));
   }
 
   async generateTechnicalDiagram(prompt: string): Promise<string | undefined> {
     try {
-      return await this.apiFetch(() => generateDiagramAction(prompt));
+      return await this.executeAction(() => generateDiagramAction(prompt));
     } catch (e) {
-      console.warn("Visual aid skipped due to simulated API error:", e);
+      console.warn("Diagram generation skipped:", e);
       return undefined;
     }
   }

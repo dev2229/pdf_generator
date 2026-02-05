@@ -4,17 +4,29 @@ import { QuestionItem, AcademicContext } from "../types";
 
 export class GeminiService {
   private getClient() {
-    // Guidelines: Use process.env.API_KEY directly and use named parameter for initialization
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Check for process.env availability defensively
+    const apiKey = (window as any).process?.env?.API_KEY || '';
+    
+    if (!apiKey || apiKey.trim() === '') {
+      console.error("GeminiService: API_KEY is missing from environment variables.");
+      throw new Error("API configuration is missing. Please ensure you are in the correct environment.");
+    }
+    
+    try {
+      return new GoogleGenAI({ apiKey });
+    } catch (e) {
+      console.error("Failed to initialize GoogleGenAI client:", e);
+      throw new Error("AI Engine failed to start. Check browser console for details.");
+    }
   }
 
-  private async callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+  private async callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 2000): Promise<T> {
     try {
       return await fn();
     } catch (error: any) {
       const isQuotaError = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
       if (isQuotaError && retries > 0) {
-        console.warn(`Quota exceeded, retrying in ${delay}ms... (${retries} retries left)`);
+        console.warn(`Quota exceeded, retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return this.callWithRetry(fn, retries - 1, delay * 2);
       }
@@ -51,14 +63,9 @@ export class GeminiService {
         }
       });
 
-      try {
-        // Access text property directly as per guidelines
-        const content = response.text;
-        return JSON.parse(content?.trim() || '[]');
-      } catch (e) {
-        console.error("Extraction parse error", e);
-        return [];
-      }
+      const content = response.text;
+      if (!content) return [];
+      return JSON.parse(content.trim());
     });
   }
 
@@ -99,14 +106,9 @@ export class GeminiService {
         }
       });
 
-      try {
-        // Access text property directly as per guidelines
-        const content = response.text;
-        return JSON.parse(content?.trim() || '[]');
-      } catch (e) {
-        console.error("Solver parse error", e);
-        return questions.map(q => ({ ...q, answer: "Error processing solution." }));
-      }
+      const content = response.text;
+      if (!content) return questions.map(q => ({ ...q, answer: "Solution failed." }));
+      return JSON.parse(content.trim());
     });
   }
 
@@ -129,7 +131,7 @@ export class GeminiService {
         }
       }
     } catch (e) {
-      console.error("Diagram generation failed", e);
+      console.warn("Visual aid skipped due to error:", e);
     }
     return undefined;
   }

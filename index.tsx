@@ -1,34 +1,27 @@
 
-if (typeof window !== 'undefined') {
-  (window as any).process = (window as any).process || { env: {} };
-  (window as any).process.env = (window as any).process.env || {};
-}
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Global error logger for easier debugging
-window.onerror = function(message) {
-  const root = document.getElementById('root');
-  if (root && root.innerHTML.includes('BOOTING')) {
-    root.innerHTML = `
-      <div style="padding: 40px; color: #ef4444; font-family: sans-serif; text-align: center;">
-        <h1 style="font-weight: 800; margin-bottom: 16px;">BOOT ERROR</h1>
-        <p style="color: #94a3b8; font-size: 14px;">${message}</p>
-        <button onclick="window.location.reload()" style="margin-top: 24px; padding: 12px 24px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">RETRY LOAD</button>
+const rootElement = document.getElementById('root');
+
+if (!rootElement) {
+  console.error("Critical: Root element not found.");
+} else {
+  try {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  } catch (error) {
+    console.error("React Mounting Error:", error);
+    rootElement.innerHTML = `
+      <div style="color: white; background: #ef4444; padding: 20px; font-family: sans-serif;">
+        <h2>Application Crash</h2>
+        <pre>${error instanceof Error ? error.message : String(error)}</pre>
       </div>
     `;
   }
-  return false;
-};
-
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
 }

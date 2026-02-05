@@ -6,10 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AceExam Pro - AI Question Bank Solver</title>
     
-    <!-- PDF.js - Loaded early from trusted CDN -->
+    <!-- PDF.js - Loaded early -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Tailwind CSS - Fixed version for stability -->
+    <!-- 1. CRITICAL: Global Polyfills MUST be first and blocking -->
+    <script>
+      window.process = window.process || { env: {} };
+      window.process.env = window.process.env || {};
+      // Ensure API_KEY exists as a string to prevent SDK initialization crashes
+      window.process.env.API_KEY = window.process.env.API_KEY || '';
+    </script>
+
+    <!-- 2. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     <script>
       tailwind.config = {
@@ -26,19 +34,9 @@
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
       
-      :root {
-        --bg-dark: #020617;
-      }
+      :root { --bg-dark: #020617; }
+      body { background-color: var(--bg-dark); color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; }
 
-      body {
-        background-color: var(--bg-dark);
-        color: #f8fafc;
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-      }
-
-      /* Enhanced initial loading feedback */
       #root:empty::before {
         content: 'BOOTING ACADEMIC ENGINE';
         display: flex;
@@ -74,18 +72,13 @@
         animation: shine 8s linear infinite;
       }
 
-      @keyframes shine {
-        to { background-position: 200% center; }
-      }
+      @keyframes shine { to { background-position: 200% center; } }
 
       .mesh-blob {
         position: fixed;
-        width: 600px;
-        height: 600px;
-        filter: blur(120px);
-        opacity: 0.15;
-        z-index: -1;
-        border-radius: 50%;
+        width: 600px; height: 600px;
+        filter: blur(120px); opacity: 0.15;
+        z-index: -1; border-radius: 50%;
         animation: float 20s infinite alternate;
         pointer-events: none;
       }
@@ -110,10 +103,7 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         transition: border-color 0.2s ease;
       }
-      
-      .input-field:focus {
-        border-color: rgba(59, 130, 246, 0.5);
-      }
+      .input-field:focus { border-color: rgba(59, 130, 246, 0.5); }
     </style>
 
     <script type="importmap">
@@ -132,6 +122,7 @@
 </head>
 <body class="selection:bg-blue-500/30">
     <div id="root"></div>
+    <!-- 3. Entry point loaded last -->
     <script type="module" src="index.tsx"></script>
 </body>
 </html>

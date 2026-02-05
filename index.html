@@ -6,13 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AceExam Pro - AI Question Bank Solver</title>
     
-    <!-- PDF.js - Loaded early -->
+    <!-- PDF.js - Loaded early from trusted CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Tailwind CSS - Using the standard CDN with a check -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS - Fixed version for stability -->
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     <script>
-      // Configure Tailwind to avoid common JIT initialization issues
       tailwind.config = {
         theme: {
           extend: {
@@ -36,10 +35,12 @@
         color: #f8fafc;
         margin: 0;
         padding: 0;
+        min-height: 100vh;
       }
 
+      /* Enhanced initial loading feedback */
       #root:empty::before {
-        content: 'Initializing Academic Engine...';
+        content: 'BOOTING ACADEMIC ENGINE';
         display: flex;
         align-items: center;
         justify-content: center;
@@ -47,10 +48,16 @@
         width: 100vw;
         font-family: 'Plus Jakarta Sans', sans-serif;
         font-weight: 800;
-        letter-spacing: 0.2em;
-        color: #334155;
+        letter-spacing: 0.5em;
+        color: #1e293b;
         text-transform: uppercase;
-        font-size: 12px;
+        font-size: 14px;
+        animation: pulse 2s infinite ease-in-out;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.3; transform: scale(0.98); }
+        50% { opacity: 0.8; transform: scale(1); }
       }
 
       .glass-card {
@@ -80,35 +87,48 @@
         z-index: -1;
         border-radius: 50%;
         animation: float 20s infinite alternate;
+        pointer-events: none;
       }
 
       @keyframes float {
-        from { transform: translate(0, 0) scale(1); }
-        to { transform: translate(100px, 100px) scale(1.1); }
+        from { transform: translate(0, 0) rotate(0deg); }
+        to { transform: translate(100px, 100px) rotate(15deg); }
       }
 
       .btn-gradient {
         background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .btn-gradient:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
       }
 
       .input-field {
         background: rgba(2, 6, 23, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: border-color 0.2s ease;
+      }
+      
+      .input-field:focus {
+        border-color: rgba(59, 130, 246, 0.5);
       }
     </style>
 
     <script type="importmap">
-    {
-      "imports": {
-        "jspdf": "https://esm.sh/jspdf@^2.5.1",
-        "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
-        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-        "react/": "https://esm.sh/react@^19.2.4/",
-        "react": "https://esm.sh/react@^19.2.4"
-      }
-    }
-    </script>
+{
+  "imports": {
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "@google/genai": "https://esm.sh/@google/genai@1.39.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
 </head>
 <body class="selection:bg-blue-500/30">
     <div id="root"></div>

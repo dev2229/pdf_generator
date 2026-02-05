@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types';
-import { GeminiService } from './services/geminiService';
-import { PdfService } from './services/pdfService';
-import ProcessSteps from './components/ProcessSteps';
+import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types.ts';
+import { GeminiService } from './services/geminiService.ts';
+import { PdfService } from './services/pdfService.ts';
+import ProcessSteps from './components/ProcessSteps.tsx';
 
 const ACADEMIC_STRUCTURE: Record<string, string[]> = {
   "Engineering": [
@@ -70,6 +70,7 @@ const App: React.FC = () => {
   
   const subjectInputRef = useRef<HTMLInputElement>(null);
 
+  // Initialize services using useMemo to ensure stability
   const gemini = useMemo(() => new GeminiService(), []);
   const pdfProcessor = useMemo(() => new PdfService(), []);
 
@@ -141,7 +142,6 @@ const App: React.FC = () => {
         return;
       }
       handleProcess(file);
-      // Reset the value so the same file can be selected again if needed
       e.target.value = '';
     }
   };
@@ -185,7 +185,6 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto">
-              {/* Configuration Panel */}
               <div className="lg:col-span-6 glass-card rounded-[2.5rem] p-10 md:p-14 border border-white/5 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-1 h-full bg-blue-600"></div>
                 <div className="flex items-center gap-4 mb-10">
@@ -241,7 +240,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Upload Panel */}
               <div className="lg:col-span-6">
                 <input 
                   type="file" 

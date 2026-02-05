@@ -4,42 +4,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AceExam Pro - Engineering AI Solver</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>AceExam Pro - AI Question Bank Solver</title>
+    
+    <!-- PDF.js - Loaded early -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- Tailwind CSS - Using the standard CDN with a check -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Configure Tailwind to avoid common JIT initialization issues
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
+    
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
       
       :root {
         --bg-dark: #020617;
-        --accent-primary: #3b82f6;
-        --accent-secondary: #8b5cf6;
       }
 
       body {
-        font-family: 'Plus Jakarta Sans', sans-serif;
         background-color: var(--bg-dark);
         color: #f8fafc;
-        overflow-x: hidden;
+        margin: 0;
+        padding: 0;
       }
 
-      ::-webkit-scrollbar {
-        width: 10px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #020617;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: linear-gradient(to bottom, #1e293b, #334155);
-        border-radius: 20px;
-        border: 2px solid #020617;
+      #root:empty::before {
+        content: 'Initializing Academic Engine...';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        width: 100vw;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        color: #334155;
+        text-transform: uppercase;
+        font-size: 12px;
       }
 
       .glass-card {
         background: linear-gradient(135deg, rgba(15, 23, 42, 0.7) 0%, rgba(2, 6, 23, 0.8) 100%);
         backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
       }
 
       .gradient-text {
@@ -51,9 +68,7 @@
       }
 
       @keyframes shine {
-        to {
-          background-position: 200% center;
-        }
+        to { background-position: 200% center; }
       }
 
       .mesh-blob {
@@ -74,48 +89,26 @@
 
       .btn-gradient {
         background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      .btn-gradient:hover {
-        filter: brightness(1.1);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px -5px rgba(59, 130, 246, 0.5);
-      }
-
-      .btn-secondary {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(8px);
-      }
-
-      .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
       }
 
       .input-field {
         background: rgba(2, 6, 23, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        transition: all 0.2s ease;
-      }
-
-      .input-field:focus {
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
       }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "jspdf": "https://esm.sh/jspdf@^2.5.1",
-    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4"
-  }
-}
-</script>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "jspdf": "https://esm.sh/jspdf@^2.5.1",
+        "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+        "react/": "https://esm.sh/react@^19.2.4/",
+        "react": "https://esm.sh/react@^19.2.4"
+      }
+    }
+    </script>
 </head>
 <body class="selection:bg-blue-500/30">
     <div id="root"></div>

@@ -4,8 +4,8 @@ import { QuestionItem, AcademicContext } from "../types";
 
 export class GeminiService {
   private getClient() {
-    const apiKey = (window as any).process?.env?.API_KEY || '';
-    return new GoogleGenAI({ apiKey });
+    // Guidelines: Use process.env.API_KEY directly and use named parameter for initialization
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   private async callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
@@ -52,6 +52,7 @@ export class GeminiService {
       });
 
       try {
+        // Access text property directly as per guidelines
         const content = response.text;
         return JSON.parse(content?.trim() || '[]');
       } catch (e) {
@@ -99,6 +100,7 @@ export class GeminiService {
       });
 
       try {
+        // Access text property directly as per guidelines
         const content = response.text;
         return JSON.parse(content?.trim() || '[]');
       } catch (e) {

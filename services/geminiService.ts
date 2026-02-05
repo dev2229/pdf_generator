@@ -4,7 +4,8 @@ import { QuestionItem, AcademicContext } from "../types";
 
 export class GeminiService {
   private getClient() {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    // Initializing with named parameter as required by guidelines
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   private async callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
@@ -51,7 +52,8 @@ export class GeminiService {
       });
 
       try {
-        return JSON.parse(response.text || '[]');
+        // Accessing text property directly (not a method) and trimming
+        return JSON.parse(response.text?.trim() || '[]');
       } catch (e) {
         console.error("Extraction parse error", e);
         return [];
@@ -112,8 +114,8 @@ export class GeminiService {
       });
 
       try {
-        const text = response.text || '[]';
-        const jsonStr = text.includes('```json') ? text.split('```json')[1].split('```')[0] : text;
+        // Accessing text property directly (not a method) and trimming
+        const jsonStr = response.text?.trim() || '[]';
         return JSON.parse(jsonStr);
       } catch (e) {
         console.error("Solver failed to parse JSON:", e);
@@ -130,6 +132,7 @@ export class GeminiService {
   async generateTechnicalDiagram(prompt: string): Promise<string | undefined> {
     try {
       const ai = this.getClient();
+      // Using generateContent with gemini-2.5-flash-image for image generation
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
@@ -140,6 +143,7 @@ export class GeminiService {
         }
       });
 
+      // Iterating through parts to find the image part as recommended in guidelines
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;

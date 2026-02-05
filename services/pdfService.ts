@@ -2,33 +2,51 @@
 import { QuestionItem } from "../types";
 import { jsPDF } from "jspdf";
 
-declare const pdfjsLib: any;
+// Use window reference for pdfjsLib to avoid 'never' type narrowing in TypeScript
+declare const window: any;
 
 export class PdfService {
-  constructor() {
-    this.initWorker();
-  }
+  private workerInitialized = false;
 
-  private initWorker() {
-    if (typeof window !== 'undefined') {
-      // Ensure pdfjsLib is available (it's loaded via CDN in index.html)
-      const checkInterval = setInterval(() => {
-        if (typeof pdfjsLib !== 'undefined') {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-          clearInterval(checkInterval);
+  private async ensureLibLoaded(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Accessing pdfjsLib from window to ensure correct type resolution in browser environment
+      const lib = window.pdfjsLib;
+
+      if (typeof lib !== 'undefined') {
+        if (!this.workerInitialized) {
+          lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          this.workerInitialized = true;
+        }
+        resolve(lib);
+        return;
+      }
+
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        const currentLib = window.pdfjsLib;
+        if (typeof currentLib !== 'undefined') {
+          clearInterval(interval);
+          if (!this.workerInitialized) {
+            currentLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            this.workerInitialized = true;
+          }
+          resolve(currentLib);
+        } else if (attempts > 50) { // 5 seconds timeout
+          clearInterval(interval);
+          reject(new Error("PDF engine failed to load. Please check your internet connection."));
         }
       }, 100);
-    }
+    });
   }
 
   async extractText(file: File): Promise<string> {
-    if (typeof pdfjsLib === 'undefined') {
-      throw new Error("PDF Engine not loaded. Please check your internet connection and refresh.");
-    }
+    const lib = await this.ensureLibLoaded();
 
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const loadingTask = lib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       let fullText = "";
       
@@ -42,13 +60,13 @@ export class PdfService {
       }
       
       if (!fullText.trim()) {
-        throw new Error("This PDF seems to contain only images or is encrypted. Try a text-based PDF.");
+        throw new Error("This PDF appears to be empty or contains only scanned images (no selectable text).");
       }
       
       return fullText;
     } catch (error: any) {
-      console.error("PDF Extraction Error:", error);
-      throw new Error(error.message || "Failed to parse PDF content.");
+      console.error("PDF extraction error:", error);
+      throw new Error(error.message || "Failed to read PDF. It might be corrupted or protected.");
     }
   }
 
@@ -84,132 +102,83 @@ export class PdfService {
       return false;
     };
 
-    doc.setFontSize(26);
+    // Header Section
+    doc.setFontSize(24);
     doc.setTextColor(30, 58, 138);
     doc.setFont("helvetica", "bold");
     doc.text("AceExam Technical Guide", margin, y);
     y += 12;
 
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "italic");
-    doc.text(`SYNTHESIZED SOLUTIONS • ${new Date().toLocaleDateString()} • MULTI-FIELD RIGOR`, margin, y);
-    y += 20;
+    doc.text(`GENERATED ON ${new Date().toLocaleDateString().toUpperCase()}`, margin, y);
+    y += 15;
 
     questions.forEach((item) => {
+      // Question Title
       const qText = `QUESTION ${item.number}: ${item.question}`;
       const qLines = doc.splitTextToSize(qText, maxWidth - 4);
-      const qBoxHeight = (qLines.length * 7) + 8;
+      const qBoxHeight = (qLines.length * 6) + 8;
 
       checkPage(qBoxHeight + 10);
       
       doc.setFillColor(248, 250, 252);
-      doc.rect(margin - 2, y - 6, maxWidth + 4, qBoxHeight, 'F');
-      doc.setDrawColor(226, 232, 240);
-      doc.line(margin - 2, y - 6, margin - 2, y - 6 + qBoxHeight);
+      doc.rect(margin - 2, y - 5, maxWidth + 4, qBoxHeight, 'F');
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.2);
+      doc.rect(margin - 2, y - 5, maxWidth + 4, qBoxHeight, 'D');
 
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setTextColor(15, 23, 42);
       doc.setFont("helvetica", "bold");
-      doc.text(qLines, margin, y);
-      y += qBoxHeight + 5;
+      doc.text(qLines, margin, y + 1);
+      y += qBoxHeight + 6;
 
-      if (item.diagramDataUrl) {
-        const imgHeight = 80;
-        const imgWidth = 106; 
-        checkPage(imgHeight + 20);
-        
-        try {
-          doc.addImage(item.diagramDataUrl, 'PNG', margin + (maxWidth - imgWidth) / 2, y, imgWidth, imgHeight);
-          y += imgHeight + 6;
-          doc.setFontSize(9);
-          doc.setTextColor(71, 85, 105);
-          doc.setFont("helvetica", "italic");
-          doc.text("FIGURE: AI-Generated Conceptual Reconstruction", pageWidth / 2, y, { align: 'center' });
-          y += 12;
-        } catch (e) {
-          console.error("PDF image injection error", e);
-        }
-      }
-
+      // Solution Body
       checkPage(10);
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setTextColor(37, 99, 235);
-      doc.setFont("helvetica", "bold");
-      doc.text("EXPERT SOLUTION:", margin, y);
+      doc.text("EXPERT ANALYSIS:", margin, y);
       y += 8;
 
-      const aText = item.answer || "";
-      const lines = aText.split('\n');
-      doc.setFontSize(10.5);
-      
-      lines.forEach((line) => {
-        const trimmed = line.trim();
-        if (!trimmed) {
-          y += 4;
-          return;
-        }
-
-        const isHeader = trimmed.endsWith(':') || 
-                         trimmed.startsWith('Step') || 
-                         trimmed.includes('Given Data') || 
-                         trimmed.includes('Principle');
-
-        if (isHeader) {
-          checkPage(10);
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(15, 23, 42);
-        } else {
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(51, 65, 85);
-        }
-
-        const splitLines = doc.splitTextToSize(trimmed, maxWidth);
-        splitLines.forEach((sl: string) => {
-          checkPage(7);
-          doc.text(sl, margin, y);
-          y += 6.5;
-        });
-        if (isHeader) y += 2;
+      const aLines = doc.splitTextToSize(item.answer || "", maxWidth);
+      aLines.forEach((line: string) => {
+        checkPage(7);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        doc.text(line, margin, y);
+        y += 6;
       });
 
-      y += 10;
-      checkPage(30);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text("INTERACTIVE LEARNING RESOURCES", margin, y);
-      y += 8;
-
-      const bannerHeight = 9;
-
-      if (item.referenceDocUrl) {
-        checkPage(12);
-        doc.setFillColor(239, 246, 255); 
-        doc.roundedRect(margin, y - 5, maxWidth, bannerHeight, 1, 1, 'F');
+      // Resources
+      if (item.referenceDocUrl || item.referenceVideoUrl) {
+        y += 6;
+        checkPage(15);
+        doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(37, 99, 235);
-        doc.text("  > DOCUMENT: Academic Reference Article", margin + 2, y + 1);
-        doc.link(margin, y - 5, maxWidth, bannerHeight, { url: item.referenceDocUrl });
-        y += 12;
+        doc.setTextColor(100, 116, 139);
+        doc.text("STUDY LINKS:", margin, y);
+        y += 6;
+
+        doc.setFontSize(8.5);
+        if (item.referenceDocUrl) {
+          doc.setTextColor(37, 99, 235);
+          doc.text(`[DOC] ${item.referenceDocUrl}`, margin + 2, y);
+          doc.link(margin + 2, y - 3, maxWidth, 5, { url: item.referenceDocUrl });
+          y += 5;
+        }
+        if (item.referenceVideoUrl) {
+          doc.setTextColor(220, 38, 38);
+          doc.text(`[VIDEO] ${item.referenceVideoUrl}`, margin + 2, y);
+          doc.link(margin + 2, y - 3, maxWidth, 5, { url: item.referenceVideoUrl });
+          y += 5;
+        }
       }
 
-      if (item.referenceVideoUrl) {
-        checkPage(12);
-        doc.setFillColor(254, 242, 242); 
-        doc.roundedRect(margin, y - 5, maxWidth, bannerHeight, 1, 1, 'F');
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(220, 38, 38); 
-        doc.text("  > VIDEO: Visual Explanation Guide", margin + 2, y + 1);
-        doc.link(margin, y - 5, maxWidth, bannerHeight, { url: item.referenceVideoUrl });
-        y += 12;
-      }
-
-      y += 5;
+      y += 12;
       doc.setDrawColor(241, 245, 249);
-      doc.setLineWidth(0.5);
-      doc.line(margin, y, pageWidth - margin, y);
-      y += 15;
+      doc.line(margin, y - 6, pageWidth - margin, y - 6);
     });
 
     addFooter();

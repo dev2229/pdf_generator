@@ -9,13 +9,9 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Robust Polyfill for process.env -->
+    <!-- Polyfill for process.env - Injected by platform -->
     <script>
-      window.process = {
-        env: {
-          API_KEY: "" 
-        }
-      };
+      window.process = window.process || { env: {} };
     </script>
 
     <!-- Tailwind CSS -->
@@ -115,8 +111,8 @@
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
     "@google/genai": "https://esm.sh/@google/genai@1.39.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/"
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>

@@ -4,22 +4,19 @@ import { QuestionItem, AcademicContext } from "../types.ts";
 
 /**
  * SIMULATED BACKEND ACTIONS
- * This layer handles the actual Gemini SDK logic and secret key access.
+ * This file is the source of truth for SDK interactions.
  */
 
-const getClient = () => {
-  // Check for the API key in both process.env and the window polyfill
-  const apiKey = (window as any).process?.env?.API_KEY || (process as any).env?.API_KEY;
-  
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("ACADEMIC ENGINE ERROR: No API Key found in environment. Please check your configuration.");
+    throw new Error("API Key not found in process.env.API_KEY. Please ensure it is configured.");
   }
-  
   return new GoogleGenAI({ apiKey });
 };
 
 export async function extractQuestionsAction(text: string): Promise<QuestionItem[]> {
-  const ai = getClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Extract all exam questions from the following text. 
@@ -51,18 +48,18 @@ export async function extractQuestionsAction(text: string): Promise<QuestionItem
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Failed to parse extracted JSON", e);
+    console.error("Parse Error in extractQuestionsAction:", e);
     return [];
   }
 }
 
 export async function solveQuestionsAction(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-  const ai = getClient();
+  const ai = getAI();
   
   const prompt = `Act as a world-class Professor.
   Context: ${context.field}, ${context.subField}, Subject: ${context.subject}
   TASK: Solve these questions with depth. If math, show steps. If theory, provide structure.
-  Include a "diagramPrompt" for logic visualization (detailed description for image generation).
+  Include a "diagramPrompt" for logic visualization.
   Find high-quality links for "referenceDocUrl" and "referenceVideoUrl".
   
   Questions:
@@ -93,21 +90,21 @@ export async function solveQuestionsAction(questions: QuestionItem[], context: A
   });
 
   const content = response.text;
-  if (!content) return questions.map(q => ({ ...q, answer: "Solution failed to generate." }));
+  if (!content) return questions.map(q => ({ ...q, answer: "Solution failed." }));
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Failed to parse solved questions JSON", e);
-    return questions.map(q => ({ ...q, answer: "Formatting error in solution." }));
+    console.error("Parse Error in solveQuestionsAction:", e);
+    return questions.map(q => ({ ...q, answer: "Format error in solution." }));
   }
 }
 
 export async function generateDiagramAction(prompt: string): Promise<string | undefined> {
-  const ai = getClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{ text: `Professional academic diagram: ${prompt}. Minimalist, white background, high resolution technical illustration style.` }]
+      parts: [{ text: `Professional academic diagram: ${prompt}. Minimalist, white background, high quality.` }]
     },
     config: {
       imageConfig: { aspectRatio: "4:3" }

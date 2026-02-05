@@ -9,10 +9,9 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Polyfill for process.env - Crucial for SDK compatibility in browser-only environments -->
+    <!-- Robust Polyfill for process.env -->
     <script>
       window.process = window.process || { env: {} };
-      // The platform will inject the actual key into window.process.env.API_KEY
     </script>
 
     <!-- Tailwind CSS -->

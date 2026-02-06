@@ -1,58 +1,25 @@
 
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types.ts';
 import { GeminiService } from './services/geminiService.ts';
 import { PdfService } from './services/pdfService.ts';
 import ProcessSteps from './components/ProcessSteps.tsx';
 
 const ACADEMIC_STRUCTURE: Record<string, string[]> = {
-  "Engineering": [
-    "Computer Science & IT",
-    "Mechanical Engineering",
-    "Electrical & Electronics",
-    "Civil Engineering",
-    "Chemical Engineering",
-    "Aerospace Engineering"
-  ],
-  "Commerce": [
-    "Accounting & Finance",
-    "Business Management",
-    "Economics",
-    "Marketing",
-    "International Trade"
-  ],
-  "MBA / Management": [
-    "Strategic Management",
-    "Corporate Finance",
-    "Operations Management",
-    "Human Resources",
-    "Organizational Behavior"
-  ],
-  "Arts & Humanities": [
-    "Modern History",
-    "Political Science",
-    "Sociology",
-    "Clinical Psychology",
-    "English Literature"
-  ],
-  "Natural Sciences": [
-    "Theoretical Physics",
-    "Organic Chemistry",
-    "Molecular Biology",
-    "Applied Mathematics",
-    "Environmental Science"
-  ],
-  "Legal Studies": [
-    "Criminal Jurisprudence",
-    "Constitutional Law",
-    "Corporate Governance",
-    "International Law"
-  ]
+  "Engineering": ["Computer Science & IT", "Mechanical Engineering", "Electrical & Electronics", "Civil Engineering", "Chemical Engineering", "Aerospace Engineering"],
+  "Commerce": ["Accounting & Finance", "Business Management", "Economics", "Marketing", "International Trade"],
+  "MBA / Management": ["Strategic Management", "Corporate Finance", "Operations Management", "Human Resources", "Organizational Behavior"],
+  "Arts & Humanities": ["Modern History", "Political Science", "Sociology", "Clinical Psychology", "English Literature"],
+  "Natural Sciences": ["Theoretical Physics", "Organic Chemistry", "Molecular Biology", "Applied Mathematics", "Environmental Science"],
+  "Legal Studies": ["Criminal Jurisprudence", "Constitutional Law", "Corporate Governance", "International Law"]
 };
 
 const FIELDS = Object.keys(ACADEMIC_STRUCTURE);
 
 const App: React.FC = () => {
+  // Key state: if false, we show the selection UI
+  const [hasKey, setHasKey] = useState<boolean>(true); 
+
   const [context, setContext] = useState<AcademicContext>({
     field: FIELDS[0],
     subField: ACADEMIC_STRUCTURE[FIELDS[0]][0],
@@ -73,6 +40,46 @@ const App: React.FC = () => {
   const gemini = useMemo(() => new GeminiService(), []);
   const pdfProcessor = useMemo(() => new PdfService(), []);
 
+  // Proactive API Key Check
+  useEffect(() => {
+    const checkKeyStatus = async () => {
+      // First check if it's already in process.env
+      if (process.env.API_KEY) {
+        setHasKey(true);
+        return;
+      }
+
+      // Otherwise check the AI Studio environment
+      if ((window as any).aistudio?.hasSelectedApiKey) {
+        try {
+          const selected = await (window as any).aistudio.hasSelectedApiKey();
+          setHasKey(selected);
+        } catch (e) {
+          console.error("Key check error:", e);
+          setHasKey(false);
+        }
+      } else {
+        // If not in aistudio environment and no env key, we might be in trouble
+        // But we'll default to true and let the solver error if needed
+        setHasKey(!!process.env.API_KEY);
+      }
+    };
+    checkKeyStatus();
+  }, []);
+
+  const handleSelectKey = async () => {
+    if ((window as any).aistudio?.openSelectKey) {
+      try {
+        await (window as any).aistudio.openSelectKey();
+        setHasKey(true); // Assume success after interaction
+      } catch (e) {
+        console.error("Key selection error:", e);
+      }
+    } else {
+      setHasKey(true);
+    }
+  };
+
   const handleFieldChange = (newField: string) => {
     setContext({
       ...context,
@@ -91,20 +98,20 @@ const App: React.FC = () => {
       const questions = await gemini.extractQuestions(rawText);
       
       if (!questions || questions.length === 0) {
-        throw new Error("Could not find any clear exam questions in this PDF. Please check the file content.");
+        throw new Error("No exam questions found. Ensure PDF is text-based (not a scan).");
       }
 
       setProcessing({ status: ProcessStatus.GENERATING, progress: 50, message: 'Generating Solutions...' });
       let solved = await gemini.solveQuestions(questions, context);
 
-      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 75, message: 'Rendering Visual Aids...' });
+      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 75, message: 'Rendering Technical Visuals...' });
       const solvedWithDiagrams = await Promise.all(solved.map(async (q) => {
         if (q.diagramPrompt) {
           try {
             const imgUrl = await gemini.generateTechnicalDiagram(q.diagramPrompt);
             return { ...q, diagramDataUrl: imgUrl };
           } catch (e) {
-            console.warn("Diagram failed", e);
+            console.warn("Diagram generation skipped:", e);
             return q;
           }
         }
@@ -113,20 +120,26 @@ const App: React.FC = () => {
 
       setResults(solvedWithDiagrams);
 
-      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Finalizing Study Guide...' });
+      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Compiling Final PDF...' });
       const pdfBlob = await pdfProcessor.generateAnswerPdf(solvedWithDiagrams);
       
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       const newUrl = URL.createObjectURL(pdfBlob);
       setDownloadUrl(newUrl);
 
-      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Ready for Review' });
+      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Solutions Ready' });
     } catch (e: any) {
-      console.error("Critical Failure:", e);
+      console.error("Workflow Error:", e);
+      
+      // If we get an auth/key error during execution, force re-selection
+      if (e.message?.includes("API Key not found") || e.message?.includes("401") || e.message?.includes("auth")) {
+        setHasKey(false);
+      }
+
       setProcessing({ 
         status: ProcessStatus.ERROR, 
         progress: 0, 
-        message: e.message || 'An unexpected engine error occurred.' 
+        message: e.message || 'An internal engine error occurred.' 
       });
     }
   };
@@ -135,7 +148,7 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (!context.subject.trim()) {
-        alert("Action Required: Please enter the subject name first.");
+        alert("Please enter the Subject Name before uploading.");
         subjectInputRef.current?.focus();
         e.target.value = '';
         return;
@@ -152,6 +165,29 @@ const App: React.FC = () => {
     setDownloadUrl(null);
   };
 
+  if (!hasKey) {
+    return (
+      <div className="min-h-screen bg-[#020617] text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full glass-card p-10 rounded-[2.5rem] border border-blue-500/20 text-center animate-in zoom-in duration-500">
+          <div className="w-20 h-20 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-blue-500/20">
+            <svg className="w-10 h-10 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <h2 className="text-3xl font-black uppercase tracking-tight mb-4">Auth Required</h2>
+          <p className="text-slate-400 mb-8 font-medium">To use the Pro models for solving complex exam questions, please select your paid API key.</p>
+          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-500 text-xs font-black uppercase tracking-widest block mb-10 hover:underline">Billing Info</a>
+          <button 
+            onClick={handleSelectKey}
+            className="w-full btn-gradient py-5 rounded-2xl font-black text-lg uppercase tracking-widest shadow-lg"
+          >
+            Connect API Key
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col relative overflow-x-hidden">
       <div className="mesh-blob bg-blue-600 top-[-10%] left-[-10%] opacity-[0.2]"></div>
@@ -167,7 +203,7 @@ const App: React.FC = () => {
             </div>
             <span className="font-black text-3xl md:text-4xl tracking-tighter gradient-text uppercase">ACEEXAM <span className="text-blue-500 italic">PRO</span></span>
           </div>
-          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Cross-Disciplinary Academic AI</p>
+          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Intelligent Academic Rigor</p>
         </div>
       </header>
 
@@ -176,10 +212,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="text-center mb-16 space-y-6">
               <h1 className="text-6xl md:text-8xl lg:text-[9rem] font-black tracking-tighter leading-[0.85] gradient-text uppercase">
-                ACADEMIC <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">EXCELLENCE.</span>
+                SOLVE <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">ANY EXAM.</span>
               </h1>
               <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto opacity-80">
-                Instantly convert question banks into professional study guides.
+                AI-powered study guides generated from your question banks.
               </p>
             </div>
 
@@ -190,12 +226,12 @@ const App: React.FC = () => {
                   <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
                     <span className="font-black text-lg">01</span>
                   </div>
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Set Context</h3>
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Configuration</h3>
                 </div>
                 
                 <div className="space-y-8">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Primary Field</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Academic Field</label>
                     <div className="relative">
                       <select 
                         className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
@@ -211,7 +247,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Sub-Specialty</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Specialization</label>
                     <div className="relative">
                       <select 
                         className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
@@ -227,11 +263,11 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Subject Name</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Subject Title</label>
                     <input 
                       ref={subjectInputRef}
                       className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none placeholder:text-slate-800 text-white"
-                      placeholder="e.g. Applied Thermodynamics"
+                      placeholder="e.g. Advanced Data Structures"
                       value={context.subject}
                       onChange={e => setContext({...context, subject: e.target.value})}
                     />
@@ -263,9 +299,9 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
-                  <h4 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Ingest Bank</h4>
+                  <h4 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Upload PDF</h4>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] text-center">
-                    {context.subject.trim() ? "Select Exam PDF to Start Analysis" : "Required: Define Subject to Upload"}
+                    {context.subject.trim() ? "Select Question Bank to Start" : "Enter Subject Name to Unlock Upload"}
                   </p>
                 </label>
               </div>
@@ -282,7 +318,7 @@ const App: React.FC = () => {
             </div>
             <h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">System Error</h3>
             <p className="text-slate-400 mb-10 text-xl font-medium px-4">{processing.message}</p>
-            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest">Restart Engine</button>
+            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest">Retry Engine</button>
           </div>
         )}
 
@@ -293,25 +329,25 @@ const App: React.FC = () => {
               
               <div className="relative z-10">
                 <div className="inline-block px-8 py-3 bg-blue-500/10 border border-blue-500/20 rounded-full text-blue-400 text-[10px] font-black tracking-[0.4em] uppercase mb-10">
-                  Cycle Completed
+                  Processing Complete
                 </div>
-                <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase">RESOURCE <br/> READY.</h2>
+                <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase">STUDY GUIDE <br/> GENERATED.</h2>
                 <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
                   <a 
                     href={downloadUrl} 
-                    download={`Guide_${context.subject.replace(/\s+/g, '_')}.pdf`}
+                    download={`AceExam_${context.subject.replace(/\s+/g, '_')}.pdf`}
                     className="w-full sm:w-auto btn-gradient text-white px-12 py-8 rounded-[2rem] font-black text-2xl shadow-2xl flex items-center justify-center gap-4"
                   >
-                    DOWNLOAD PDF
+                    GET PDF GUIDE
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   </a>
-                  <button onClick={reset} className="w-full sm:w-auto btn-secondary text-white px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10">Next Study Bank</button>
+                  <button onClick={reset} className="w-full sm:w-auto px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all">New Bank</button>
                 </div>
               </div>
             </div>
 
             <div className="space-y-16">
-              <h3 className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.6em]">Interactive Solution Preview</h3>
+              <h3 className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.6em]">Solution Preview</h3>
               {results.map((item, idx) => (
                 <div key={idx} className="glass-card rounded-[2.5rem] overflow-hidden border border-white/5 shadow-xl hover:border-blue-500/30 transition-all duration-500">
                   <div className="p-8 md:p-14 border-b border-white/5 bg-slate-950/20 flex flex-col md:flex-row items-start gap-8">
@@ -337,12 +373,12 @@ const App: React.FC = () => {
                       <div className="mt-12 flex flex-wrap gap-4 pt-10 border-t border-white/10">
                         {item.referenceDocUrl && (
                           <a href={item.referenceDocUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-sm font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all">
-                            Document
+                            Docs
                           </a>
                         )}
                         {item.referenceVideoUrl && (
                           <a href={item.referenceVideoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-black uppercase tracking-widest hover:bg-red-500/20 transition-all">
-                            Video Guide
+                            Video
                           </a>
                         )}
                       </div>
@@ -357,9 +393,9 @@ const App: React.FC = () => {
 
       <footer className="py-20 border-t border-white/5 bg-slate-950/60 mt-20">
         <div className="max-w-7xl mx-auto px-10 text-center opacity-40">
-          <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4">ACEEXAM INTEL CORE v5.3</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4">ACEEXAM CORE v2.1</p>
           <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
-            &copy; {new Date().getFullYear()} UNIVERSAL RIGOR SYSTEMS
+            &copy; {new Date().getFullYear()} ACADEMIC ENGINE SYSTEMS
           </div>
         </div>
       </footer>

@@ -4,19 +4,20 @@ import { QuestionItem, AcademicContext } from "../types.ts";
 
 /**
  * SIMULATED BACKEND ACTIONS
- * This file is the source of truth for SDK interactions.
+ * This file is the bridge to the Gemini SDK. 
+ * It must have exclusive access to @google/genai.
  */
 
-const getAI = () => {
+const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found in process.env.API_KEY. Please ensure it is configured.");
+    throw new Error("ACADEMIC_ENGINE_AUTH_FAILURE: API Key not found. Please ensure your project key is selected.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
 export async function extractQuestionsAction(text: string): Promise<QuestionItem[]> {
-  const ai = getAI();
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Extract all exam questions from the following text. 
@@ -48,13 +49,13 @@ export async function extractQuestionsAction(text: string): Promise<QuestionItem
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Parse Error in extractQuestionsAction:", e);
+    console.error("Extraction Parsing Failed:", e);
     return [];
   }
 }
 
 export async function solveQuestionsAction(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-  const ai = getAI();
+  const ai = getAIClient();
   
   const prompt = `Act as a world-class Professor.
   Context: ${context.field}, ${context.subField}, Subject: ${context.subject}
@@ -90,21 +91,21 @@ export async function solveQuestionsAction(questions: QuestionItem[], context: A
   });
 
   const content = response.text;
-  if (!content) return questions.map(q => ({ ...q, answer: "Solution failed." }));
+  if (!content) return questions.map(q => ({ ...q, answer: "Solution failed to generate." }));
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Parse Error in solveQuestionsAction:", e);
-    return questions.map(q => ({ ...q, answer: "Format error in solution." }));
+    console.error("Solution Parsing Failed:", e);
+    return questions.map(q => ({ ...q, answer: "Error formatting the AI solution." }));
   }
 }
 
 export async function generateDiagramAction(prompt: string): Promise<string | undefined> {
-  const ai = getAI();
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{ text: `Professional academic diagram: ${prompt}. Minimalist, white background, high quality.` }]
+      parts: [{ text: `Professional academic diagram: ${prompt}. Clean minimalist technical style.` }]
     },
     config: {
       imageConfig: { aspectRatio: "4:3" }

@@ -9,7 +9,7 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Robust Polyfill for process.env -->
+    <!-- Polyfill for process.env - Critical for SDK to access process.env.API_KEY -->
     <script>
       window.process = window.process || { env: {} };
     </script>

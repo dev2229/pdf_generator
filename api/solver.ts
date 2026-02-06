@@ -5,24 +5,24 @@ import { QuestionItem, AcademicContext } from "../types.ts";
 /**
  * SIMULATED BACKEND ACTIONS
  * This file is the only entry point for @google/genai calls.
- * Model used: gemini-3-flash-preview (Normal Model).
+ * Updated to use 'gemini-3-flash-preview' as requested (Normal Model).
  */
 
-const getAI = () => {
+const getAIInstance = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY_MISSING: Environment variable process.env.API_KEY is not defined. Please select a key.");
+    // This error will be caught and reported to the user as an auth requirement
+    throw new Error("API_KEY_MISSING: Environment variable process.env.API_KEY is not defined. Please ensure an API Key is selected.");
   }
-  // Initialize instance immediately before call to ensure the latest key from dialog is used.
   return new GoogleGenAI({ apiKey });
 };
 
 export async function extractQuestionsAction(text: string): Promise<QuestionItem[]> {
-  const ai = getAI();
+  const ai = getAIInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: `Extract all academic exam questions from the following text. 
-    Return a JSON array of objects with "number" (string) and "question" (string).
+    Format the output as a JSON array of objects with keys "number" and "question".
     
     Text:
     ${text}`,
@@ -47,22 +47,22 @@ export async function extractQuestionsAction(text: string): Promise<QuestionItem
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Extraction Parse Error:", e);
+    console.error("Extraction Parsing Failed:", e);
     return [];
   }
 }
 
 export async function solveQuestionsAction(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-  const ai = getAI();
+  const ai = getAIInstance();
   
   const prompt = `Act as an expert Academic Solver.
-  Field: ${context.field}, Specialty: ${context.subField}, Subject: ${context.subject}
+  Subject Context: ${context.field}, ${context.subField}, Course: ${context.subject}
   
-  TASK: Provide clear, concise, exam-ready answers for these questions.
-  - Show steps for mathematical problems.
-  - Use structured bullet points for theoretical answers.
-  - Suggest a simple visual diagram description in "diagramPrompt".
-  - Provide a legitimate "referenceDocUrl" (article link) and "referenceVideoUrl" (educational video link).
+  TASK: Solve these questions with depth and clarity. 
+  - For calculation problems, provide step-by-step logic.
+  - For theoretical problems, use structured headings.
+  - Suggest a "diagramPrompt" for a logical technical illustration.
+  - Search for a "referenceDocUrl" and "referenceVideoUrl" that are highly relevant.
   
   Questions:
   ${JSON.stringify(questions, null, 2)}`;
@@ -96,17 +96,17 @@ export async function solveQuestionsAction(questions: QuestionItem[], context: A
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Solver Parse Error:", e);
-    return questions.map(q => ({ ...q, answer: "Error formatting the response." }));
+    console.error("Solver Parsing Failed:", e);
+    return questions.map(q => ({ ...q, answer: "Format error in AI output." }));
   }
 }
 
 export async function generateDiagramAction(prompt: string): Promise<string | undefined> {
-  const ai = getAI();
+  const ai = getAIInstance();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{ text: `Professional educational diagram: ${prompt}. Minimalist, white background, high contrast.` }]
+      parts: [{ text: `High-quality academic diagram: ${prompt}. Technical, clean, white background.` }]
     },
     config: {
       imageConfig: { aspectRatio: "4:3" }

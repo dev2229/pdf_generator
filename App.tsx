@@ -17,8 +17,8 @@ const ACADEMIC_STRUCTURE: Record<string, string[]> = {
 const FIELDS = Object.keys(ACADEMIC_STRUCTURE);
 
 const App: React.FC = () => {
-  // Check if API Key is available. In AI Studio, this is managed via process.env.API_KEY.
-  const [hasKey, setHasKey] = useState<boolean>(true); 
+  // Defensive initialization: check if API key exists in environment immediately
+  const [hasKey, setHasKey] = useState<boolean>(!!process.env.API_KEY); 
 
   const [context, setContext] = useState<AcademicContext>({
     field: FIELDS[0],
@@ -40,9 +40,9 @@ const App: React.FC = () => {
   const gemini = useMemo(() => new GeminiService(), []);
   const pdfProcessor = useMemo(() => new PdfService(), []);
 
-  // Initial Key verification logic
   useEffect(() => {
     const verifyAuth = async () => {
+      // If already in environment, we are good
       if (process.env.API_KEY) {
         setHasKey(true);
         return;
@@ -57,6 +57,9 @@ const App: React.FC = () => {
           console.error("Auth check failed:", e);
           setHasKey(false);
         }
+      } else {
+        // Not in aistudio env and no process key? We need a key.
+        setHasKey(false);
       }
     };
     verifyAuth();
@@ -67,11 +70,12 @@ const App: React.FC = () => {
     if (aistudio?.openSelectKey) {
       try {
         await aistudio.openSelectKey();
-        setHasKey(true); 
+        setHasKey(true); // Assume success after triggering dialog per guidelines
       } catch (e) {
-        console.error("Key selection failed:", e);
+        console.error("Key selection UI failed:", e);
       }
     } else {
+      // Fallback or manual entry not permitted by guidelines
       setHasKey(true);
     }
   };
@@ -86,21 +90,20 @@ const App: React.FC = () => {
 
   const handleProcess = async (file: File) => {
     try {
-      setProcessing({ status: ProcessStatus.EXTRACTING, progress: 10, message: 'Extracting PDF content...' });
-      
+      setProcessing({ status: ProcessStatus.EXTRACTING, progress: 10, message: 'Processing Document...' });
       const rawText = await pdfProcessor.extractText(file);
       
-      setProcessing({ status: ProcessStatus.ANALYZING, progress: 30, message: 'Parsing exam structure...' });
+      setProcessing({ status: ProcessStatus.ANALYZING, progress: 30, message: 'Parsing Exam Structure...' });
       const questions = await gemini.extractQuestions(rawText);
       
       if (!questions || questions.length === 0) {
-        throw new Error("No clear questions detected. Please ensure the PDF has readable text.");
+        throw new Error("No clear questions detected. Please ensure the PDF contains extractable text.");
       }
 
-      setProcessing({ status: ProcessStatus.GENERATING, progress: 60, message: 'Synthesizing academic solutions...' });
+      setProcessing({ status: ProcessStatus.GENERATING, progress: 60, message: 'Generating Solutions (Flash)...' });
       let solved = await gemini.solveQuestions(questions, context);
 
-      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 85, message: 'Rendering technical visuals...' });
+      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 85, message: 'Rendering Visual Aids...' });
       const solvedWithDiagrams = await Promise.all(solved.map(async (q) => {
         if (q.diagramPrompt) {
           try {
@@ -116,26 +119,26 @@ const App: React.FC = () => {
 
       setResults(solvedWithDiagrams);
 
-      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Assembling study guide...' });
+      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Compiling Guide...' });
       const pdfBlob = await pdfProcessor.generateAnswerPdf(solvedWithDiagrams);
       
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       const newUrl = URL.createObjectURL(pdfBlob);
       setDownloadUrl(newUrl);
 
-      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Compilation Complete' });
+      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Process Finished' });
     } catch (e: any) {
       console.error("Workflow Error:", e);
       
-      // Force key selection UI if auth failure occurs
-      if (e.message?.includes("API_KEY_MISSING") || e.message?.includes("401")) {
+      // Handle key selection failures if they occur during processing
+      if (e.message?.includes("API_KEY_MISSING") || e.message?.includes("401") || e.message?.includes("auth")) {
         setHasKey(false);
       }
 
       setProcessing({ 
         status: ProcessStatus.ERROR, 
         progress: 0, 
-        message: e.message || 'The academic engine encountered an error.' 
+        message: e.message || 'An unexpected error occurred during processing.' 
       });
     }
   };
@@ -144,7 +147,7 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (!context.subject.trim()) {
-        alert("Please enter the Subject Name first.");
+        alert("Subject Name is required to continue.");
         subjectInputRef.current?.focus();
         e.target.value = '';
         return;
@@ -164,28 +167,28 @@ const App: React.FC = () => {
   if (!hasKey) {
     return (
       <div className="min-h-screen bg-[#020617] text-slate-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full glass-card p-12 rounded-[3rem] border border-blue-500/20 text-center animate-in zoom-in duration-500">
-          <div className="w-24 h-24 bg-blue-500/10 rounded-3xl flex items-center justify-center mx-auto mb-10 border border-blue-500/20">
+        <div className="max-w-md w-full glass-card p-12 rounded-[3rem] border border-blue-500/30 text-center animate-in zoom-in duration-500">
+          <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-10 border border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
             <svg className="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <h2 className="text-4xl font-black uppercase tracking-tight mb-4 leading-none">Authentication Needed</h2>
-          <p className="text-slate-400 mb-10 font-medium">To use the Flash academic models, please connect your authorized API key.</p>
+          <h2 className="text-4xl font-black uppercase tracking-tight mb-4 leading-none">Access Locked</h2>
+          <p className="text-slate-400 mb-10 font-medium">Please connect your authorized Gemini API key to use the academic solver engine.</p>
           <button 
             onClick={handleSelectKey}
             className="w-full btn-gradient py-6 rounded-2xl font-black text-xl uppercase tracking-widest shadow-2xl"
           >
-            Connect API Key
+            Authenticate API
           </button>
-          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="block mt-8 text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] hover:text-blue-500 transition-colors">Billing & Documentation</a>
+          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="block mt-8 text-slate-500 text-[10px] font-black uppercase tracking-[0.3em] hover:text-blue-500 transition-colors">Billing Information</a>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col relative overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col relative overflow-x-hidden">
       <div className="mesh-blob bg-blue-600 top-[-10%] left-[-10%] opacity-[0.2]"></div>
       <div className="mesh-blob bg-indigo-600 bottom-[-10%] right-[-10%] opacity-[0.2]"></div>
 
@@ -199,7 +202,7 @@ const App: React.FC = () => {
             </div>
             <span className="font-black text-3xl md:text-4xl tracking-tighter gradient-text uppercase">ACEEXAM <span className="text-blue-500 italic">PRO</span></span>
           </div>
-          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Intelligent Question Solver</p>
+          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Intelligent Exam Processor</p>
         </div>
       </header>
 
@@ -208,10 +211,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="text-center mb-16 space-y-6">
               <h1 className="text-6xl md:text-8xl lg:text-[9rem] font-black tracking-tighter leading-[0.85] gradient-text uppercase">
-                CRACK THE <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">EXAM CODE.</span>
+                SOLVE <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">ANY EXAM.</span>
               </h1>
               <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto opacity-80">
-                Transform scanned banks into clean study guides instantly.
+                Transform scanned banks into clean, searchable study guides in seconds.
               </p>
             </div>
 
@@ -227,40 +230,33 @@ const App: React.FC = () => {
                 
                 <div className="space-y-8">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Primary Field</label>
-                    <div className="relative">
-                      <select 
-                        className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
-                        value={context.field}
-                        onChange={e => handleFieldChange(e.target.value)}
-                      >
-                        {FIELDS.map(f => <option key={f} value={f} className="bg-slate-950">{f}</option>)}
-                      </select>
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-blue-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M19 9l-7 7-7-7" /></svg>
-                      </div>
-                    </div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Field</label>
+                    <select 
+                      className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
+                      value={context.field}
+                      onChange={e => handleFieldChange(e.target.value)}
+                    >
+                      {FIELDS.map(f => <option key={f} value={f} className="bg-slate-950">{f}</option>)}
+                    </select>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Department</label>
-                    <div className="relative">
-                      <select 
-                        className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
-                        value={context.subField}
-                        onChange={e => setContext({...context, subField: e.target.value})}
-                      >
-                        {ACADEMIC_STRUCTURE[context.field].map(sf => <option key={sf} value={sf} className="bg-slate-950">{sf}</option>)}
-                      </select>
-                    </div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Specialization</label>
+                    <select 
+                      className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none appearance-none text-white cursor-pointer"
+                      value={context.subField}
+                      onChange={e => setContext({...context, subField: e.target.value})}
+                    >
+                      {ACADEMIC_STRUCTURE[context.field].map(sf => <option key={sf} value={sf} className="bg-slate-950">{sf}</option>)}
+                    </select>
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Course Title</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Course Name</label>
                     <input 
                       ref={subjectInputRef}
                       className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none placeholder:text-slate-800 text-white"
-                      placeholder="e.g. Artificial Intelligence 101"
+                      placeholder="e.g. Distributed Systems 101"
                       value={context.subject}
                       onChange={e => setContext({...context, subject: e.target.value})}
                     />
@@ -294,7 +290,7 @@ const App: React.FC = () => {
                   </div>
                   <h4 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Injection Port</h4>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] text-center">
-                    {context.subject.trim() ? "Drop Question Bank PDF to Start" : "Set Subject to Unlock"}
+                    {context.subject.trim() ? "Drop Question Bank PDF to Start" : "Enter Subject to Enable Engine"}
                   </p>
                 </label>
               </div>
@@ -306,36 +302,30 @@ const App: React.FC = () => {
 
         {processing.status === ProcessStatus.ERROR && (
           <div className="max-w-2xl mx-auto text-center p-12 glass-card rounded-[3rem] border-red-500/20 shadow-2xl animate-in zoom-in">
-            <h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">System Error</h3>
+            <h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">Engine Malfunction</h3>
             <p className="text-slate-400 mb-10 text-xl font-medium px-4">{processing.message}</p>
-            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest shadow-xl">Reset Engine</button>
+            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest shadow-xl">Reboot Core</button>
           </div>
         )}
 
         {processing.status === ProcessStatus.COMPLETED && downloadUrl && (
           <div className="animate-in slide-in-from-bottom-12 duration-1000 max-w-5xl mx-auto">
-            <div className="glass-card rounded-[3rem] p-12 md:p-24 text-center mb-16 relative overflow-hidden border-white/5 shadow-2xl">
-              <div className="relative z-10">
-                <div className="inline-block px-8 py-3 bg-green-500/10 border border-green-500/20 rounded-full text-green-400 text-[10px] font-black tracking-[0.4em] uppercase mb-10">
-                  Solutions Generated
-                </div>
-                <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase leading-none">TARGET <br/> ACQUIRED.</h2>
-                <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-                  <a 
-                    href={downloadUrl} 
-                    download={`AceExam_Guide_${context.subject.replace(/\s+/g, '_')}.pdf`}
-                    className="w-full sm:w-auto btn-gradient text-white px-12 py-8 rounded-[2rem] font-black text-2xl shadow-2xl flex items-center justify-center gap-4 transition-transform hover:scale-105"
-                  >
-                    GET STUDY GUIDE
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                  </a>
-                  <button onClick={reset} className="w-full sm:w-auto px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all">New Session</button>
-                </div>
+            <div className="glass-card rounded-[3rem] p-12 md:p-24 text-center mb-16 border-white/5 shadow-2xl">
+              <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase leading-none">PROCESS <br/> COMPLETE.</h2>
+              <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+                <a 
+                  href={downloadUrl} 
+                  download={`AceExam_Guide_${context.subject.replace(/\s+/g, '_')}.pdf`}
+                  className="w-full sm:w-auto btn-gradient text-white px-12 py-8 rounded-[2rem] font-black text-2xl shadow-2xl flex items-center justify-center gap-4 transition-transform hover:scale-105"
+                >
+                  DOWNLOAD GUIDE
+                </a>
+                <button onClick={reset} className="w-full sm:w-auto px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all">New Session</button>
               </div>
             </div>
 
             <div className="space-y-12">
-              <h3 className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.6em]">Live Preview</h3>
+              <h3 className="text-center text-[10px] font-black text-slate-500 uppercase tracking-[0.6em]">Solution Stream</h3>
               {results.map((item, idx) => (
                 <div key={idx} className="glass-card rounded-[2.5rem] overflow-hidden border border-white/5 shadow-xl transition-all duration-500 hover:border-blue-500/30">
                   <div className="p-8 md:p-12 border-b border-white/5 bg-slate-950/20 flex flex-col md:flex-row items-start gap-8">
@@ -344,25 +334,9 @@ const App: React.FC = () => {
                     </div>
                     <h3 className="text-2xl md:text-3xl font-black text-white leading-tight uppercase tracking-tight">{item.question}</h3>
                   </div>
-                  
                   <div className="p-8 md:p-12 space-y-10">
-                    {item.diagramDataUrl && (
-                      <div className="rounded-[2rem] border border-white/10 overflow-hidden bg-white p-6 shadow-inner">
-                        <img src={item.diagramDataUrl} alt="Visual Logic" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
-                      </div>
-                    )}
-                    
                     <div className="text-xl md:text-2xl text-slate-300 leading-relaxed whitespace-pre-line font-medium break-words border-l-4 border-blue-500/30 pl-8">
                       {item.answer}
-                    </div>
-
-                    <div className="flex flex-wrap gap-4 pt-8 border-t border-white/10">
-                      {item.referenceDocUrl && (
-                        <a href={item.referenceDocUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-black uppercase tracking-widest hover:bg-blue-500/20">Article</a>
-                      )}
-                      {item.referenceVideoUrl && (
-                        <a href={item.referenceVideoUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-black uppercase tracking-widest hover:bg-red-500/20">Video</a>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -372,12 +346,10 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="py-20 border-t border-white/5 bg-slate-950/60 mt-20 relative z-20">
-        <div className="max-w-7xl mx-auto px-10 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4 text-slate-700">ACEEXAM INFRASTRUCTURE v3.0</p>
-          <div className="text-[9px] font-bold text-slate-800 uppercase tracking-widest">
-            &copy; {new Date().getFullYear()} ACADEMIC ENGINE SYSTEMS
-          </div>
+      <footer className="py-20 border-t border-white/5 bg-slate-950/60 mt-20 text-center opacity-40">
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4">ACEEXAM SYSTEMS v3.2</p>
+        <div className="text-[9px] font-bold uppercase tracking-widest">
+          &copy; {new Date().getFullYear()} CORE ENGINE REPOSITORY
         </div>
       </footer>
     </div>

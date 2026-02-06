@@ -9,7 +9,7 @@
     <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Robust Polyfill for process.env - Critical for SDK to find process.env.API_KEY -->
+    <!-- Polyfill for process.env - Essential for @google/genai to access the API Key -->
     <script>
       window.process = window.process || { env: {} };
     </script>
@@ -32,10 +32,10 @@
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
       
       :root { --bg-dark: #020617; }
-      body { background-color: var(--bg-dark); color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; }
+      body { background-color: var(--bg-dark); color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; overflow-x: hidden; }
 
       #root:empty::before {
-        content: 'BOOTING ACADEMIC ENGINE';
+        content: 'LOADING ACADEMIC ENGINE';
         display: flex;
         align-items: center;
         justify-content: center;
@@ -100,7 +100,7 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         transition: border-color 0.2s ease;
       }
-      .input-field:focus { border-color: rgba(59, 130, 246, 0.5); }
+      .input-field:focus { border-color: rgba(59, 130, 246, 0.5); outline: none; }
     </style>
 
     <script type="importmap">

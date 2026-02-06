@@ -4,27 +4,25 @@ import { QuestionItem, AcademicContext } from "../types.ts";
 
 /**
  * SIMULATED BACKEND ACTIONS
- * This file is the bridge to the Gemini SDK. 
- * It must have exclusive access to @google/genai.
+ * This file is the only entry point for @google/genai calls.
+ * Model used: gemini-3-flash-preview (Normal Model).
  */
 
-const getAIClient = () => {
+const getAI = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("ACADEMIC_ENGINE_AUTH_FAILURE: API Key not found. Please ensure your project key is selected.");
+    throw new Error("API_KEY_MISSING: Environment variable process.env.API_KEY is not defined. Please select a key.");
   }
+  // Initialize instance immediately before call to ensure the latest key from dialog is used.
   return new GoogleGenAI({ apiKey });
 };
 
 export async function extractQuestionsAction(text: string): Promise<QuestionItem[]> {
-  const ai = getAIClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Extract all exam questions from the following text. 
-    Format them as a JSON array of objects.
-    Each object should have:
-    - "number": the question number.
-    - "question": the text of the question.
+    contents: `Extract all academic exam questions from the following text. 
+    Return a JSON array of objects with "number" (string) and "question" (string).
     
     Text:
     ${text}`,
@@ -49,25 +47,28 @@ export async function extractQuestionsAction(text: string): Promise<QuestionItem
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Extraction Parsing Failed:", e);
+    console.error("Extraction Parse Error:", e);
     return [];
   }
 }
 
 export async function solveQuestionsAction(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-  const ai = getAIClient();
+  const ai = getAI();
   
-  const prompt = `Act as a world-class Professor.
-  Context: ${context.field}, ${context.subField}, Subject: ${context.subject}
-  TASK: Solve these questions with depth. If math, show steps. If theory, provide structure.
-  Include a "diagramPrompt" for logic visualization.
-  Find high-quality links for "referenceDocUrl" and "referenceVideoUrl".
+  const prompt = `Act as an expert Academic Solver.
+  Field: ${context.field}, Specialty: ${context.subField}, Subject: ${context.subject}
+  
+  TASK: Provide clear, concise, exam-ready answers for these questions.
+  - Show steps for mathematical problems.
+  - Use structured bullet points for theoretical answers.
+  - Suggest a simple visual diagram description in "diagramPrompt".
+  - Provide a legitimate "referenceDocUrl" (article link) and "referenceVideoUrl" (educational video link).
   
   Questions:
   ${JSON.stringify(questions, null, 2)}`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
@@ -91,21 +92,21 @@ export async function solveQuestionsAction(questions: QuestionItem[], context: A
   });
 
   const content = response.text;
-  if (!content) return questions.map(q => ({ ...q, answer: "Solution failed to generate." }));
+  if (!content) return questions.map(q => ({ ...q, answer: "AI generation failed." }));
   try {
     return JSON.parse(content.trim());
   } catch (e) {
-    console.error("Solution Parsing Failed:", e);
-    return questions.map(q => ({ ...q, answer: "Error formatting the AI solution." }));
+    console.error("Solver Parse Error:", e);
+    return questions.map(q => ({ ...q, answer: "Error formatting the response." }));
   }
 }
 
 export async function generateDiagramAction(prompt: string): Promise<string | undefined> {
-  const ai = getAIClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: {
-      parts: [{ text: `Professional academic diagram: ${prompt}. Clean minimalist technical style.` }]
+      parts: [{ text: `Professional educational diagram: ${prompt}. Minimalist, white background, high contrast.` }]
     },
     config: {
       imageConfig: { aspectRatio: "4:3" }

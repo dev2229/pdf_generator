@@ -3,123 +3,131 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { QuestionItem, AcademicContext } from "../types.ts";
 
 /**
- * SERVER-LIKE ACTION MODULE
- * This file handles all direct interaction with the Gemini API.
- * 
- * Rules:
- * 1. Obtained exclusively from process.env.API_KEY.
- * 2. Uses 'Normal' models: gemini-3-flash-preview and gemini-2.5-flash-image.
+ * SECURE ACTION MODULE
+ * Implementation following the secure handler pattern.
+ * Uses gemini-3-flash-preview for text and gemini-2.5-flash-image for visuals.
  */
 
-const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API_KEY_MISSING: Environment variable process.env.API_KEY is not defined. Please ensure your API key is selected via the project settings.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
 export async function extractQuestionsAction(text: string): Promise<QuestionItem[]> {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Extract all exam questions from this text. 
-    Format the output as a JSON array of objects with keys "number" and "question".
-    
-    Text:
-    ${text}`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            number: { type: Type.STRING },
-            question: { type: Type.STRING }
-          },
-          required: ["number", "question"]
-        }
-      }
-    }
-  });
+  if (!text) throw new Error("Prompt/Text is required for extraction");
 
-  const content = response.text;
-  if (!content) return [];
   try {
-    return JSON.parse(content.trim());
-  } catch (e) {
-    console.error("Extraction Parse Error:", e);
-    return [];
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Extract all academic exam questions from the following text. 
+      Format as a JSON array of objects with keys "number" and "question".
+      
+      Text:
+      ${text}`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              number: { type: Type.STRING },
+              question: { type: Type.STRING }
+            },
+            required: ["number", "question"]
+          }
+        },
+        temperature: 0.1,
+      },
+    });
+
+    if (!response || !response.text) {
+      throw new Error("Empty response from AI model during extraction");
+    }
+
+    return JSON.parse(response.text.trim());
+  } catch (error: any) {
+    console.error("Gemini Extraction Error details:", JSON.stringify(error, null, 2));
+    throw new Error(error.message || 'An error occurred during question extraction');
   }
 }
 
 export async function solveQuestionsAction(questions: QuestionItem[], context: AcademicContext): Promise<QuestionItem[]> {
-  const ai = getAI();
-  
-  const prompt = `Act as an expert Academic Solver.
-  Subject: ${context.subject}
-  Field: ${context.field} -> ${context.subField}
-  
-  TASK: Solve these questions with high academic standards. 
-  - Show step-by-step logic for math or technical problems.
-  - Use structured formatting for theoretical answers.
-  - Suggest a simple visual "diagramPrompt" for a logical technical illustration.
-  - Provide a "referenceDocUrl" (educational article) and "referenceVideoUrl" (video tutorial).
-  
-  Questions:
-  ${JSON.stringify(questions, null, 2)}`;
+  if (!questions || questions.length === 0) throw new Error("Questions list is required");
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            number: { type: Type.STRING },
-            question: { type: Type.STRING },
-            answer: { type: Type.STRING },
-            diagramPrompt: { type: Type.STRING },
-            referenceDocUrl: { type: Type.STRING },
-            referenceVideoUrl: { type: Type.STRING }
-          },
-          required: ["number", "question", "answer", "referenceDocUrl", "referenceVideoUrl"]
-        }
-      }
-    }
-  });
-
-  const content = response.text;
-  if (!content) return questions.map(q => ({ ...q, answer: "Solution generation failed." }));
   try {
-    return JSON.parse(content.trim());
-  } catch (e) {
-    console.error("Solver Parse Error:", e);
-    return questions.map(q => ({ ...q, answer: "Error formatting AI solution." }));
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const prompt = `Act as an expert Academic Solver for the subject: ${context.subject}.
+    Field Context: ${context.field} -> ${context.subField}
+    
+    TASK: Solve these questions with depth and clarity. 
+    - Show step-by-step logic for math or technical problems.
+    - Use structured bullet points for theory.
+    - Suggest a visual "diagramPrompt" for technical illustrations.
+    - Provide a "referenceDocUrl" (article) and "referenceVideoUrl" (video).
+    
+    Questions:
+    ${JSON.stringify(questions, null, 2)}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              number: { type: Type.STRING },
+              question: { type: Type.STRING },
+              answer: { type: Type.STRING },
+              diagramPrompt: { type: Type.STRING },
+              referenceDocUrl: { type: Type.STRING },
+              referenceVideoUrl: { type: Type.STRING }
+            },
+            required: ["number", "question", "answer", "referenceDocUrl", "referenceVideoUrl"]
+          }
+        },
+        temperature: 0.3,
+      },
+    });
+
+    if (!response || !response.text) {
+      throw new Error("Empty response from AI model during solving");
+    }
+
+    return JSON.parse(response.text.trim());
+  } catch (error: any) {
+    console.error("Gemini Solving Error details:", JSON.stringify(error, null, 2));
+    throw new Error(error.message || 'An error occurred during AI generation of solutions');
   }
 }
 
 export async function generateDiagramAction(prompt: string): Promise<string | undefined> {
-  const ai = getAI();
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image',
-    contents: {
-      parts: [{ text: `Professional academic diagram: ${prompt}. Clean minimalist style, white background.` }]
-    },
-    config: {
-      imageConfig: { aspectRatio: "4:3" }
-    }
-  });
+  if (!prompt) return undefined;
 
-  for (const part of response.candidates?.[0]?.content?.parts || []) {
-    if (part.inlineData) {
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [{ text: `Professional academic diagram: ${prompt}. Clean white background, minimalist technical style.` }]
+      },
+      config: {
+        imageConfig: { aspectRatio: "4:3" }
+      },
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
     }
+    return undefined;
+  } catch (error: any) {
+    console.error("Gemini Diagram Error details:", JSON.stringify(error, null, 2));
+    // We don't throw here to avoid failing the whole process if just a diagram fails
+    return undefined;
   }
-  return undefined;
 }

@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types.ts';
 import { GeminiService } from './services/geminiService.ts';
 import { PdfService } from './api/pdfService.ts';
@@ -17,9 +17,6 @@ const ACADEMIC_STRUCTURE: Record<string, string[]> = {
 const FIELDS = Object.keys(ACADEMIC_STRUCTURE);
 
 const App: React.FC = () => {
-  // Check for existing API key immediately
-  const [hasKey, setHasKey] = useState<boolean>(!!process.env.API_KEY); 
-
   const [context, setContext] = useState<AcademicContext>({
     field: FIELDS[0],
     subField: ACADEMIC_STRUCTURE[FIELDS[0]][0],
@@ -29,7 +26,7 @@ const App: React.FC = () => {
   const [processing, setProcessing] = useState<ProcessingState>({
     status: ProcessStatus.IDLE,
     progress: 0,
-    message: 'Engine Ready'
+    message: 'Engine Standby'
   });
   
   const [results, setResults] = useState<QuestionItem[]>([]);
@@ -39,45 +36,6 @@ const App: React.FC = () => {
 
   const gemini = useMemo(() => new GeminiService(), []);
   const pdfProcessor = useMemo(() => new PdfService(), []);
-
-  // Auth Status Effect
-  useEffect(() => {
-    const verifyAuth = async () => {
-      // Priority 1: Environment Variable
-      if (process.env.API_KEY) {
-        setHasKey(true);
-        return;
-      }
-      
-      // Priority 2: Studio helper
-      const aistudio = (window as any).aistudio;
-      if (aistudio?.hasSelectedApiKey) {
-        try {
-          const selected = await aistudio.hasSelectedApiKey();
-          setHasKey(selected);
-        } catch (e) {
-          console.error("Auth check error:", e);
-          setHasKey(false);
-        }
-      }
-    };
-    verifyAuth();
-  }, []);
-
-  const handleSelectKey = async () => {
-    const aistudio = (window as any).aistudio;
-    if (aistudio?.openSelectKey) {
-      try {
-        await aistudio.openSelectKey();
-        // Assume success and proceed per guidelines
-        setHasKey(true); 
-      } catch (e) {
-        console.error("Key UI launch failed:", e);
-      }
-    } else {
-      setHasKey(true);
-    }
-  };
 
   const handleFieldChange = (newField: string) => {
     setContext({
@@ -89,27 +47,27 @@ const App: React.FC = () => {
 
   const handleProcess = async (file: File) => {
     try {
-      setProcessing({ status: ProcessStatus.EXTRACTING, progress: 10, message: 'Processing PDF Data...' });
+      setProcessing({ status: ProcessStatus.EXTRACTING, progress: 10, message: 'Ingesting Document...' });
       const rawText = await pdfProcessor.extractText(file);
       
-      setProcessing({ status: ProcessStatus.ANALYZING, progress: 30, message: 'Parsing Exam Questions...' });
+      setProcessing({ status: ProcessStatus.ANALYZING, progress: 30, message: 'Parsing Question Structure...' });
       const questions = await gemini.extractQuestions(rawText);
       
       if (!questions || questions.length === 0) {
-        throw new Error("No clear questions detected. Please ensure the PDF contains searchable text (OCR required for images).");
+        throw new Error("No clear questions detected. Please ensure the PDF is text-based.");
       }
 
-      setProcessing({ status: ProcessStatus.GENERATING, progress: 60, message: 'Synthesizing Answers (Flash)...' });
+      setProcessing({ status: ProcessStatus.GENERATING, progress: 60, message: 'Solving via Flash-3 Engine...' });
       let solved = await gemini.solveQuestions(questions, context);
 
-      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 85, message: 'Generating Graphics...' });
+      setProcessing({ status: ProcessStatus.GENERATING_DIAGRAMS, progress: 85, message: 'Generating Technical Visuals...' });
       const solvedWithDiagrams = await Promise.all(solved.map(async (q) => {
         if (q.diagramPrompt) {
           try {
             const imgUrl = await gemini.generateTechnicalDiagram(q.diagramPrompt);
             return { ...q, diagramDataUrl: imgUrl };
           } catch (e) {
-            console.warn("Graphic generation skipped:", e);
+            console.warn("Visual generation skipped:", e);
             return q;
           }
         }
@@ -118,26 +76,26 @@ const App: React.FC = () => {
 
       setResults(solvedWithDiagrams);
 
-      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Compiling Final PDF...' });
+      setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Exporting Comprehensive Guide...' });
       const pdfBlob = await pdfProcessor.generateAnswerPdf(solvedWithDiagrams);
       
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       const newUrl = URL.createObjectURL(pdfBlob);
       setDownloadUrl(newUrl);
 
-      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Success' });
+      setProcessing({ status: ProcessStatus.COMPLETED, progress: 100, message: 'Process Finished' });
     } catch (e: any) {
-      console.error("Critical Failure:", e);
+      console.error("Workflow Error:", e);
+      let errorMsg = e.message || 'An unexpected engine error occurred.';
       
-      // If we hit an Auth Error, force the key selection view
-      if (e.message?.includes("API_KEY_MISSING") || e.message?.includes("AUTH_REQUIRED") || e.message?.includes("401") || e.message?.includes("entity was not found")) {
-        setHasKey(false);
+      if (e.message?.includes("API_KEY_MISSING") || e.message?.includes("401")) {
+        errorMsg = "Critical: API_KEY is missing. Please ensure it is set in Project Settings → Environment Variables.";
       }
 
       setProcessing({ 
         status: ProcessStatus.ERROR, 
         progress: 0, 
-        message: e.message || 'An unrecoverable engine error occurred.' 
+        message: errorMsg 
       });
     }
   };
@@ -146,7 +104,7 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (!context.subject.trim()) {
-        alert("Subject Name is required before processing.");
+        alert("Subject Title is mandatory before ingestion.");
         subjectInputRef.current?.focus();
         e.target.value = '';
         return;
@@ -157,34 +115,11 @@ const App: React.FC = () => {
   };
 
   const reset = () => {
-    setProcessing({ status: ProcessStatus.IDLE, progress: 0, message: 'Engine Ready' });
+    setProcessing({ status: ProcessStatus.IDLE, progress: 0, message: 'Engine Standby' });
     setResults([]);
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
   };
-
-  if (!hasKey) {
-    return (
-      <div className="min-h-screen bg-[#020617] text-slate-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full glass-card p-12 rounded-[3rem] border border-blue-500/30 text-center animate-in zoom-in duration-500">
-          <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-10 border border-blue-500/20 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
-            <svg className="w-12 h-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
-          </div>
-          <h2 className="text-4xl font-black uppercase tracking-tight mb-4 leading-none">Auth Required</h2>
-          <p className="text-slate-400 mb-10 font-medium">Please connect your authorized Gemini API key to use the academic solver core.</p>
-          <button 
-            onClick={handleSelectKey}
-            className="w-full btn-gradient py-6 rounded-2xl font-black text-xl uppercase tracking-widest shadow-2xl"
-          >
-            Select API Key
-          </button>
-          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="block mt-8 text-slate-600 text-[10px] font-black uppercase tracking-[0.3em] hover:text-blue-500 transition-colors">Billing & Billing Documentation</a>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-100 flex flex-col relative overflow-x-hidden font-sans">
@@ -201,7 +136,7 @@ const App: React.FC = () => {
             </div>
             <span className="font-black text-3xl md:text-4xl tracking-tighter gradient-text uppercase">ACEEXAM <span className="text-blue-500 italic">PRO</span></span>
           </div>
-          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Academic Intelligence Core</p>
+          <p className="text-[10px] font-black tracking-[0.4em] text-slate-500 uppercase">Universal Academic Engine</p>
         </div>
       </header>
 
@@ -210,10 +145,10 @@ const App: React.FC = () => {
           <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
             <div className="text-center mb-16 space-y-6">
               <h1 className="text-6xl md:text-8xl lg:text-[9rem] font-black tracking-tighter leading-[0.85] gradient-text uppercase">
-                SOLVE <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">ANY BANK.</span>
+                SOLVE <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-500 italic">INSTANTLY.</span>
               </h1>
               <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mx-auto opacity-80">
-                Turn PDFs into detailed, visual study guides in seconds.
+                Transform scanned banks into high-quality, solved study guides in seconds.
               </p>
             </div>
 
@@ -224,7 +159,7 @@ const App: React.FC = () => {
                   <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
                     <span className="font-black text-lg">01</span>
                   </div>
-                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Setup</h3>
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Configuration</h3>
                 </div>
                 
                 <div className="space-y-8">
@@ -251,11 +186,11 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Subject Name</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest pl-1">Course Name</label>
                     <input 
                       ref={subjectInputRef}
                       className="w-full input-field rounded-2xl px-6 py-5 text-lg font-black outline-none placeholder:text-slate-800 text-white"
-                      placeholder="e.g. Distributed Systems 101"
+                      placeholder="e.g. Distributed Operating Systems"
                       value={context.subject}
                       onChange={e => setContext({...context, subject: e.target.value})}
                     />
@@ -287,9 +222,9 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
-                  <h4 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Inject PDF</h4>
+                  <h4 className="text-3xl font-black text-white mb-2 uppercase tracking-tight">Injection Port</h4>
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] text-center">
-                    {context.subject.trim() ? "Select Question Bank to Start" : "Set Subject to Unlock Engine"}
+                    {context.subject.trim() ? "Drop Question Bank PDF to Start" : "Enter Subject to Enable Engine"}
                   </p>
                 </label>
               </div>
@@ -301,9 +236,9 @@ const App: React.FC = () => {
 
         {processing.status === ProcessStatus.ERROR && (
           <div className="max-w-2xl mx-auto text-center p-12 glass-card rounded-[3rem] border-red-500/20 shadow-2xl animate-in zoom-in">
-            <h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">System Error</h3>
+            <h3 className="text-4xl font-black text-white mb-4 uppercase tracking-tighter">Engine Failure</h3>
             <p className="text-slate-400 mb-10 text-xl font-medium px-4">{processing.message}</p>
-            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest shadow-xl">Reset Engine</button>
+            <button onClick={reset} className="w-full btn-gradient h-16 rounded-2xl font-black text-xl text-white uppercase tracking-widest shadow-xl">Reboot Engine</button>
           </div>
         )}
 
@@ -312,16 +247,16 @@ const App: React.FC = () => {
             <div className="glass-card rounded-[3rem] p-12 md:p-24 text-center mb-16 border-white/5 shadow-2xl relative overflow-hidden">
                <div className="absolute inset-0 bg-blue-600/5"></div>
                <div className="relative z-10">
-                <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase leading-none">TARGET <br/> SOLVED.</h2>
+                <h2 className="text-6xl md:text-8xl font-black mb-10 tracking-tighter gradient-text uppercase leading-none text-white">TARGET <br/> SOLVED.</h2>
                 <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
                   <a 
                     href={downloadUrl} 
                     download={`AceExam_Guide_${context.subject.replace(/\s+/g, '_')}.pdf`}
                     className="w-full sm:w-auto btn-gradient text-white px-12 py-8 rounded-[2rem] font-black text-2xl shadow-2xl flex items-center justify-center gap-4 transition-transform hover:scale-105"
                   >
-                    GET STUDY GUIDE
+                    DOWNLOAD GUIDE
                   </a>
-                  <button onClick={reset} className="w-full sm:w-auto px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all">New Session</button>
+                  <button onClick={reset} className="w-full sm:w-auto px-10 py-8 rounded-[2rem] font-black text-xl uppercase tracking-widest border border-white/10 hover:bg-white/5 transition-all text-white">New Session</button>
                 </div>
               </div>
             </div>
@@ -339,7 +274,7 @@ const App: React.FC = () => {
                   <div className="p-8 md:p-12 space-y-10">
                     {item.diagramDataUrl && (
                       <div className="rounded-[2rem] border border-white/10 overflow-hidden bg-white p-6 shadow-inner">
-                        <img src={item.diagramDataUrl} alt="Visual Solution" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
+                        <img src={item.diagramDataUrl} alt="Visual Logic" className="w-full h-auto max-h-[400px] object-contain mx-auto" />
                       </div>
                     )}
                     <div className="text-xl md:text-2xl text-slate-300 leading-relaxed whitespace-pre-line font-medium break-words border-l-4 border-blue-500/30 pl-8">
@@ -347,7 +282,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap gap-4 pt-8 border-t border-white/10">
                       {item.referenceDocUrl && (
-                        <a href={item.referenceDocUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all">Source Article</a>
+                        <a href={item.referenceDocUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all">Research Link</a>
                       )}
                       {item.referenceVideoUrl && (
                         <a href={item.referenceVideoUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-black uppercase tracking-widest hover:bg-red-500/20 transition-all">Video Ref</a>
@@ -362,7 +297,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="py-20 border-t border-white/5 bg-slate-950/60 mt-20 text-center opacity-40">
-        <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4 text-slate-700">ACEEXAM SYSTEMS v4.0</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.5em] mb-4 text-slate-700">ACEEXAM SYSTEMS v4.5</p>
         <div className="text-[9px] font-bold text-slate-800 uppercase tracking-widest">
           &copy; {new Date().getFullYear()} CORE ENGINE REPOSITORY
         </div>

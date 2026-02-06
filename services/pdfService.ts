@@ -1,10 +1,10 @@
 
-import { QuestionItem } from "../types.ts";
 import { jsPDF } from "jspdf";
+import { QuestionItem } from "../types.ts";
 
 /**
  * CLIENT-SIDE PDF SERVICE
- * Handles browser-only tasks: PDF text extraction and PDF generation.
+ * Handles browser-only operations: PDF text extraction and PDF generation.
  */
 export class PdfService {
   private workerInitialized = false;
@@ -57,32 +57,71 @@ export class PdfService {
     return fullText;
   }
 
-  async generateAnswerPdf(questions: QuestionItem[]): Promise<Blob> {
+  async generateAnswerPdf(questions: QuestionItem[], subject: string): Promise<Blob> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const margin = 20;
     let y = 20;
 
-    doc.setFontSize(22);
-    doc.text("AceExam Study Guide", margin, y);
-    y += 20;
+    // Header
+    doc.setFontSize(24);
+    doc.setTextColor(30, 64, 175); // blue-800
+    doc.setFont("helvetica", "bold");
+    doc.text("ACEEXAM STUDY GUIDE", margin, y);
+    
+    y += 10;
+    doc.setFontSize(12);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFont("helvetica", "normal");
+    doc.text(`SUBJECT: ${subject.toUpperCase()}`, margin, y);
+    
+    y += 15;
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.line(margin, y, 190, y);
+    y += 15;
 
-    questions.forEach((item) => {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      const qLines = doc.splitTextToSize(`Q${item.number}: ${item.question}`, 170);
-      doc.text(qLines, margin, y);
-      y += (qLines.length * 7) + 5;
-
-      doc.setFont("helvetica", "normal");
-      const aLines = doc.splitTextToSize(item.answer || "", 170);
-      doc.text(aLines, margin, y);
-      y += (aLines.length * 6) + 15;
-
-      if (y > 250) {
+    for (const item of questions) {
+      // Check for page overflow
+      if (y > 260) {
         doc.addPage();
         y = margin;
       }
-    });
+
+      // Question block
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.setFont("helvetica", "bold");
+      const qLines = doc.splitTextToSize(`Q${item.number}: ${item.question}`, 170);
+      doc.text(qLines, margin, y);
+      y += (qLines.length * 6) + 3;
+
+      // Answer block
+      doc.setFontSize(10);
+      doc.setTextColor(51, 65, 85); // slate-700
+      doc.setFont("helvetica", "normal");
+      const aLines = doc.splitTextToSize(item.answer || "No answer generated.", 170);
+      doc.text(aLines, margin, y);
+      y += (aLines.length * 5) + 8;
+
+      // References
+      if (item.referenceDocUrl || item.referenceVideoUrl) {
+        doc.setFontSize(8);
+        doc.setTextColor(59, 130, 246); // blue-500
+        if (item.referenceDocUrl) {
+          doc.text(`Reference Link: ${item.referenceDocUrl}`, margin + 5, y);
+          y += 4;
+        }
+        if (item.referenceVideoUrl) {
+          doc.text(`Video Tutorial: ${item.referenceVideoUrl}`, margin + 5, y);
+          y += 4;
+        }
+        y += 6;
+      }
+
+      // Separator
+      doc.setDrawColor(241, 245, 249); // slate-100
+      doc.line(margin, y, 190, y);
+      y += 10;
+    }
 
     return doc.output('blob');
   }

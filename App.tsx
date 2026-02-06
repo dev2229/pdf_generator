@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { ProcessStatus, ProcessingState, QuestionItem, AcademicContext } from './types.ts';
 import { GeminiService } from './services/geminiService.ts';
-import { PdfService } from './services/pdfService.ts'; // Correctly importing from services/
+import { PdfService } from './services/pdfService.ts';
 import ProcessSteps from './components/ProcessSteps.tsx';
 
 const ACADEMIC_STRUCTURE: Record<string, string[]> = {
@@ -76,7 +76,9 @@ const App: React.FC = () => {
       setResults(solvedWithDiagrams);
 
       setProcessing({ status: ProcessStatus.CREATING_PDF, progress: 95, message: 'Exporting Comprehensive Guide...' });
-      const pdfBlob = await pdfProcessor.generateAnswerPdf(solvedWithDiagrams);
+      
+      // GENERATING PDF LOCALLY IN BROWSER
+      const pdfBlob = await pdfProcessor.generateAnswerPdf(solvedWithDiagrams, context.subject);
       
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       const newUrl = URL.createObjectURL(pdfBlob);
